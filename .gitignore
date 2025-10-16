@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+
+# Environment and secrets
+.env
+.env.*
+*.sqlite3
+cr_series.db
+
+# VSCode & system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Logs
+*.log
+
+# Cache
+__pycache__/
+.pytest_cache/
+
+# Build / dist
+build/
+dist/
