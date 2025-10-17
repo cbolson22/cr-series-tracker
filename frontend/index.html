@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CR Series Tracker · Demo (Vibrant)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --accent1: 245 158 11; /* amber */
+        --accent2: 34 211 238; /* cyan */
+        --elixir: 236 72 153; /* pink for elixir */
+      }
+      .glass {
+        background: linear-gradient(
+          180deg,
+          rgba(var(--accent2) / 0.08),
+          rgba(255 255 255 / 0.06)
+        );
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+    </style>
+  </head>
+  <body
+    class="min-h-screen bg-gradient-to-br from-indigo-950 via-sky-900 to-emerald-900 text-amber-50"
+  >
+    <section class="relative">
+      <div class="absolute inset-0 -z-10 opacity-50">
+        <div
+          class="absolute -top-32 -left-20 h-80 w-80 rounded-full blur-3xl"
+          style="
+            background: radial-gradient(
+              closest-side,
+              rgba(var(--accent1) / 0.45),
+              transparent
+            );
+          "
+        ></div>
+        <div
+          class="absolute -bottom-24 -right-24 h-80 w-80 rounded-full blur-3xl"
+          style="
+            background: radial-gradient(
+              closest-side,
+              rgba(var(--accent2) / 0.45),
+              transparent
+            );
+          "
+        ></div>
+      </div>
+      <div class="max-w-6xl mx-auto px-6 pt-10 pb-6">
+        <div
+          class="flex flex-col md:flex-row md:items-end md:justify-between gap-4"
+        >
+          <div>
+            <h1
+              class="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-cyan-400"
+            >
+              Clash Royale · Series Tracker
+            </h1>
+            <p class="text-cyan-200">
+              Best-of-7 · 2v2 Touchdown Draft · In-clan
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div id="lastUpdated" class="text-sm text-cyan-200">
+              Last updated: —
+            </div>
+            <button
+              id="refreshBtn"
+              class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-cyan-400 text-black font-semibold shadow hover:opacity-95 active:scale-[.98]"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main class="max-w-6xl mx-auto px-6 pb-16">
+      <div class="glass rounded-2xl p-2 mb-6">
+        <nav class="grid grid-cols-3 gap-2">
+          <button
+            class="tab-btn bg-gradient-to-r from-amber-400 to-cyan-400 text-black font-semibold px-4 py-2 rounded-xl"
+            data-tab="leaderboard"
+          >
+            Series Wins
+          </button>
+          <button
+            class="tab-btn px-4 py-2 rounded-xl text-cyan-200 hover:bg-white/5"
+            data-tab="elixir"
+          >
+            Avg Elixir
+          </button>
+          <button
+            class="tab-btn px-4 py-2 rounded-xl text-cyan-200 hover:bg-white/5"
+            data-tab="cards"
+          >
+            Card Win%
+          </button>
+        </nav>
+      </div>
+
+      <section id="leaderboard" class="tab-content glass rounded-2xl p-6 mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-amber-300">
+          Series Wins (All-time)
+        </h2>
+        <div class="overflow-x-auto rounded-xl ring-1 ring-white/10">
+          <table class="min-w-full text-sm">
+            <thead class="bg-white/10 text-cyan-100">
+              <tr>
+                <th class="text-left py-3 pl-4 pr-3">#</th>
+                <th class="text-left py-3 px-3">Player</th>
+                <th class="text-left py-3 px-3">Series Wins</th>
+                <th class="text-left py-3 px-3">Trend</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-leaderboard" class="backdrop-blur"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="elixir" class="tab-content glass rounded-2xl p-6 hidden">
+        <h2 class="text-xl font-semibold mb-4 text-pink-400">
+          Average Elixir Leaked
+        </h2>
+        <div class="overflow-x-auto rounded-xl ring-1 ring-white/10">
+          <table class="min-w-full text-sm">
+            <thead class="bg-white/10 text-cyan-100">
+              <tr>
+                <th class="text-left py-3 pl-4 pr-3">#</th>
+                <th class="text-left py-3 px-3">Player</th>
+                <th class="text-left py-3 px-3">Games</th>
+                <th class="text-left py-3 px-3">Avg Elixir</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-elixir"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="cards" class="tab-content glass rounded-2xl p-6 hidden">
+        <h2 class="text-xl font-semibold mb-4 text-amber-300">
+          Card Win Percentage
+        </h2>
+        <div
+          id="cardsGrid"
+          class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        ></div>
+      </section>
+    </main>
+
+    <script>
+      const API_BASE = "http://127.0.0.1:8000";
+
+      async function fetchJSON(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.json();
+      }
+
+      async function loadAll() {
+        try {
+          // Fetch everything we need in parallel
+          const [lastUpdate, lb, ex, playerMap, cards, idMap, iconMap] =
+            await Promise.all([
+              fetchJSON(`${API_BASE}/last-update`),
+              fetchJSON(`${API_BASE}/leaderboard/series`),
+              fetchJSON(`${API_BASE}/stats/elixir`),
+              fetchJSON("player_map.json"), // local file
+              fetchJSON(`${API_BASE}/stats/cards`),
+              fetchJSON("card_id_map.json"), // local file
+              fetchJSON("card_icon_map.json"), // local file
+            ]);
+
+          // Last updated
+          document.getElementById("lastUpdated").textContent =
+            "Last updated: " + (lastUpdate.last_battle_time ?? "—");
+
+          // Leaderboard (map tag -> display name)
+          const lbRows = lb.map((r) => ({
+            player_tag: r.player_tag,
+            name: playerMap[r.player_tag] || r.player_tag,
+            series_wins: r.series_wins,
+            delta: 0,
+          }));
+          renderLeaderboard(lbRows);
+
+          // Elixir (map tag -> display name)
+          const exRows = ex.map((r) => ({
+            player_tag: r.player_tag,
+            name: playerMap[r.player_tag] || r.player_tag,
+            games: r.games,
+            avg_leaked: r.avg_leaked,
+          }));
+          renderElixir(exRows);
+
+          // Cards (map id -> name + icon)
+          const cardRows = cards.map((c) => ({
+            id: c.card_id,
+            name: idMap[c.card_id] || `Card #${c.card_id}`,
+            wins: c.wins,
+            losses: c.losses,
+            icon: iconMap[c.card_id] || null,
+          }));
+          renderCards(cardRows);
+        } catch (e) {
+          console.error(e);
+          document.getElementById("lastUpdated").textContent = "Load failed";
+        }
+      }
+
+      const avatarFor = (tag) =>
+        `https://picsum.photos/seed/${encodeURIComponent(tag.slice(1))}/64`;
+      const imgForCard = (name) =>
+        `https://picsum.photos/seed/${encodeURIComponent(name)}/200/120`;
+
+      function trendBadge(delta) {
+        if (delta > 0)
+          return `<span class='inline-block px-2 py-1 rounded-full bg-emerald-500/30 text-emerald-100'>▲ ${delta}</span>`;
+        if (delta < 0)
+          return `<span class='inline-block px-2 py-1 rounded-full bg-rose-500/30 text-rose-100'>▼ ${Math.abs(
+            delta
+          )}</span>`;
+        return `<span class='inline-block px-2 py-1 rounded-full bg-slate-600/30 text-slate-200'>—</span>`;
+      }
+
+      function renderLeaderboard(rows) {
+        document.getElementById("tbody-leaderboard").innerHTML = rows
+          .map(
+            (r, i) => `
+        <tr class='border-b border-white/10 hover:bg-white/10'>
+          <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
+          <td class='py-3 px-3 flex items-center gap-3'>
+            <img src='${avatarFor(
+              r.player_tag
+            )}' class='h-8 w-8 rounded-full ring-2 ring-cyan-300/40'>
+            <div><div class='font-semibold text-amber-100'>${
+              r.name
+            }</div><div class='text-xs text-cyan-300'>${
+              r.player_tag
+            }</div></div>
+          </td>
+          <td class='py-3 px-3 text-lg font-bold text-cyan-200'>${
+            r.series_wins
+          }</td>
+          <td class='py-3 px-3'>${trendBadge(r.delta)}</td>
+        </tr>`
+          )
+          .join("");
+      }
+
+      function renderElixir(rows) {
+        const sorted = [...rows].sort((a, b) => a.avg_leaked - b.avg_leaked);
+        document.getElementById("tbody-elixir").innerHTML = sorted
+          .map(
+            (r, i) => `
+        <tr class='border-b border-white/10 hover:bg-white/10'>
+          <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
+          <td class='py-3 px-3 flex items-center gap-3'>
+            <img src='${avatarFor(
+              r.player_tag
+            )}' class='h-8 w-8 rounded-full ring-2 ring-pink-400/40'>
+            <div><div class='font-semibold text-pink-300'>${
+              r.name
+            }</div><div class='text-xs text-pink-200'>${
+              r.player_tag
+            }</div></div>
+          </td>
+          <td class='py-3 px-3'>${r.games}</td>
+          <td class='py-3 px-3'><span class='inline-block px-2 py-1 rounded-full bg-pink-500/30 text-pink-100 ring-1 ring-pink-500/40'>${r.avg_leaked.toFixed(
+            2
+          )}</span></td>
+        </tr>`
+          )
+          .join("");
+      }
+
+      function renderCards(rows) {
+        const sorted = [...rows].sort(
+          (a, b) => b.wins / (b.wins + b.losses) - a.wins / (a.wins + a.losses)
+        );
+        document.getElementById("cardsGrid").innerHTML = sorted
+          .map((c) => {
+            const total = c.wins + c.losses;
+            const winPct = total ? (c.wins / total) * 100 : 0;
+            return `<article class='rounded-xl overflow-hidden ring-1 ring-white/20 bg-white/10 hover:bg-white/20 transition'>
+          <img src='${c.icon || imgForCard(c.name)}' alt='${
+              c.name
+            }' class='w-full h-32 object-cover'>
+          <div class='p-4'>
+            <div class='flex items-center justify-between mb-1'><h3 class='font-semibold text-amber-200'>${
+              c.name
+            }</h3><div class='text-sm text-cyan-100'>${c.wins}-${
+              c.losses
+            }</div></div>
+            <div class='h-2 w-full bg-white/20 rounded-full overflow-hidden mb-1'><div class='h-full bg-gradient-to-r from-cyan-400 to-amber-300' style='width:${winPct.toFixed(
+              1
+            )}%'></div></div>
+            <div class='text-xs text-cyan-100'>Win rate: <span class='font-semibold text-amber-200'>${winPct.toFixed(
+              1
+            )}%</span></div>
+          </div>
+        </article>`;
+          })
+          .join("");
+      }
+
+      const tabs = document.querySelectorAll(".tab-btn");
+      const contents = document.querySelectorAll(".tab-content");
+      tabs.forEach((btn) =>
+        btn.addEventListener("click", () => {
+          tabs.forEach((b) =>
+            b.classList.remove(
+              "bg-gradient-to-r",
+              "from-amber-400",
+              "to-cyan-400",
+              "text-black"
+            )
+          );
+          btn.classList.add(
+            "bg-gradient-to-r",
+            "from-amber-400",
+            "to-cyan-400",
+            "text-black"
+          );
+          contents.forEach((c) => c.classList.add("hidden"));
+          document.getElementById(btn.dataset.tab).classList.remove("hidden");
+        })
+      );
+
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        loadAll().then(() => {
+          document.getElementById("lastUpdated").textContent =
+            "Last updated: " + new Date().toLocaleTimeString();
+        });
+      });
+
+      loadAll();
+    </script>
+  </body>
+</html>
