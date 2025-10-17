@@ -53,27 +53,53 @@ def detect_series(db: Session, since_hours: int | None = 6):
 
 # Finalize a session of games, creating a Series if applicable
 def _finish_session(db: Session, pk, session_games: list[Game]):
+    """
+    Scan a contiguous time 'session' of games between the same two duos.
+    Create a Series every time one side reaches 4 wins (Bo7), then reset
+    counters and keep scanning in case there is another back-to-back Bo7.
+    Returns the number of Series rows created.
+    """
     wins = {'A': 0, 'B': 0}
-    used = []
+    used: list[Game] = []          # games in the current Bo7-in-progress
+    current_start = None           # started_at for the current Bo7
+    created = 0
+
     for g in session_games:
+        # If we are starting a fresh Bo7 chunk, mark its start time
+        if not used:
+            current_start = g.battle_time
         used.append(g)
+
+        # Count only decisive games
         if g.winner_team in ('A', 'B'):
             wins[g.winner_team] += 1
+
+        # Check for Bo7 completion
         if wins['A'] == 4 or wins['B'] == 4:
             winner = 'A' if wins['A'] == 4 else 'B'
-            sid = series_id(pk, session_games[0].battle_time)
+            # First game of this Bo7 chunk determines tags/mode
+            first_game = used[0]
+            sid = series_id(pk, current_start)
+
             if not db.get(Series, sid):
                 db.add(Series(
                     id=sid,
-                    started_at=session_games[0].battle_time,
-                    ended_at=g.battle_time,
-                    mode_id=session_games[0].mode_id,
-                    teamA_tag1=session_games[0].teamA_tag1,
-                    teamA_tag2=session_games[0].teamA_tag2,
-                    teamB_tag1=session_games[0].teamB_tag1,
-                    teamB_tag2=session_games[0].teamB_tag2,
+                    started_at=current_start,
+                    ended_at=g.battle_time,                # clincher time
+                    mode_id=first_game.mode_id,
+                    teamA_tag1=first_game.teamA_tag1,
+                    teamA_tag2=first_game.teamA_tag2,
+                    teamB_tag1=first_game.teamB_tag1,
+                    teamB_tag2=first_game.teamB_tag2,
                     winner_team=winner,
                     game_ids=json.dumps([x.id for x in used]),
                     season_id=None,
                 ))
-            break
+                created += 1
+
+            # Reset to look for another Bo7 immediately after
+            wins = {'A': 0, 'B': 0}
+            used = []
+            current_start = None
+
+    return created
