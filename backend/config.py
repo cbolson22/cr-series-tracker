@@ -6,7 +6,7 @@ load_dotenv()
 
 CR_TOKEN = os.getenv("CR_TOKEN", "")
 
-PLAYER_TAGS = [t.strip() for t in os.getenv("PLAYER_TAGS", "").split(",") if t.strip()]
+PLAYER_TAGS = [t.strip().upper() for t in os.getenv("PLAYER_TAGS", "").split(",") if t.strip()]
 PLAYER_NAMES = [n.strip() for n in os.getenv("PLAYER_NAMES", "").split(",") if n.strip()]
 
 # Ensure tag and name lists are the same length
