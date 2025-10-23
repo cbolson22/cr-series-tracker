@@ -27,7 +27,7 @@ python3 -m backend.seed_players # optional now, recommended before ingest
 
 ### 2) Fetch once (ingest) & detect series
 
-python3 -m backend.scripts.fetch_once
+python3 -m scripts.fetch_once
 
 ### 3) Run API
 
