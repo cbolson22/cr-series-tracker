@@ -31,3 +31,6 @@ __pycache__/
 # Build / dist
 build/
 dist/
+
+# Ignore local player images
+frontend/images/
