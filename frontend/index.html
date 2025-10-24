@@ -88,32 +88,26 @@
             class="tab-btn bg-gradient-to-r from-amber-400 to-cyan-400 text-black font-semibold px-4 py-2 rounded-xl"
             data-tab="leaderboard"
           >
-            Series Wins
-          </button>
-          <button
-            class="tab-btn px-4 py-2 rounded-xl text-cyan-200 hover:bg-white/5"
-            data-tab="elixir"
-          >
-            Avg Elixir
+            Leaderboard
           </button>
           <button
             class="tab-btn px-4 py-2 rounded-xl text-cyan-200 hover:bg-white/5"
             data-tab="cards"
           >
-            Card Win%
+            Card Win %
           </button>
           <button
             class="tab-btn px-4 py-2 rounded-xl text-cyan-200 hover:bg-white/5"
             data-tab="h2h"
           >
-            H2H Cards
+            Card H2H
           </button>
         </nav>
       </div>
 
       <section id="leaderboard" class="tab-content glass rounded-2xl p-6 mb-6">
         <h2 class="text-xl font-semibold mb-4 text-amber-300">
-          Series Wins (All-time)
+          Leaderboard (All-time)
         </h2>
         <div class="overflow-x-auto rounded-xl ring-1 ring-white/10">
           <table class="min-w-full text-sm">
@@ -160,7 +154,7 @@
       </section>
       <section id="h2h" class="tab-content glass rounded-2xl p-6 hidden">
         <h2 class="text-xl font-semibold mb-4 text-amber-300">
-          Head-to-Head (Series)
+          Card Head-to-Head (Games)
         </h2>
 
         <div class="grid sm:grid-cols-2 gap-4 mb-4">
@@ -234,34 +228,46 @@
           </div>
 
           <div class="grid sm:grid-cols-3 gap-3">
-            <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
+            <div
+              class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+            >
+              <div class="text-xs text-cyan-200">Games Won (Card 1)</div>
+              <div id="h2hWon1" class="text-2xl font-bold text-emerald-300">
+                0
+              </div>
+            </div>
+            <div
+              class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+            >
               <div class="text-xs text-cyan-200">Games Played</div>
               <div id="h2hPlayed" class="text-2xl font-bold text-cyan-200">
                 0
               </div>
             </div>
-            <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-              <div class="text-xs text-cyan-200">Ganes Won (Card 1)</div>
-              <div id="h2hWon" class="text-2xl font-bold text-emerald-300">
-                0
-              </div>
-            </div>
-            <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-              <div class="text-xs text-cyan-200">Win % (Card 1)</div>
-              <div id="h2hWinPct" class="text-2xl font-bold text-amber-300">
-                0%
-              </div>
+            <div
+              class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+            >
+              <div class="text-xs text-cyan-200">Games Won (Card 2)</div>
+              <div id="h2hWon2" class="text-2xl font-bold text-rose-300">0</div>
             </div>
           </div>
 
           <div class="mt-4">
-            <div class="text-sm text-cyan-100 mb-2">Win share</div>
+            <div class="flex justify-between text-xs text-cyan-100 mb-1">
+              <span id="h2hPct1">0%</span>
+              <span id="h2hPct2">0%</span>
+            </div>
             <div
-              class="h-3 w-full bg-white/15 rounded-full overflow-hidden ring-1 ring-white/10"
+              class="h-3 w-full bg-white/15 rounded-full overflow-hidden ring-1 ring-white/10 flex"
             >
               <div
-                id="h2hWinBar"
-                class="h-full bg-gradient-to-r from-cyan-400 to-amber-300"
+                id="h2hBar1"
+                class="h-full bg-gradient-to-r from-cyan-400 to-emerald-300"
+                style="width: 0%"
+              ></div>
+              <div
+                id="h2hBar2"
+                class="h-full bg-gradient-to-r from-amber-300 to-rose-400"
                 style="width: 0%"
               ></div>
             </div>
@@ -278,6 +284,7 @@
       let _idMap = {}; // card_id -> name
       let _iconMap = {}; // card_id -> icon url
       let _gamesByTag = {}; // player_tag -> games played
+      let _avgElixirByTag = {}; // player_tag -> avg_elixir
 
       async function fetchJSON(url) {
         const res = await fetch(url);
@@ -302,6 +309,13 @@
           // store maps globally for H2H
           _idMap = idMap; // card_id -> name
           _iconMap = iconMap; // card_id -> icon url
+          // cache games & avg elixir for modal
+          _gamesByTag = Object.fromEntries(
+            ex.map((r) => [r.player_tag, r.games])
+          );
+          _avgElixirByTag = Object.fromEntries(
+            ex.map((r) => [r.player_tag, r.avg_leaked])
+          );
 
           // populate the H2H dropdowns (sorted by name)
           const options = Object.entries(_idMap)
@@ -312,10 +326,18 @@
           document.getElementById("h2hCard1").innerHTML = options;
           document.getElementById("h2hCard2").innerHTML = options;
 
-          // set initial icons
-          const c1 = document.getElementById("h2hCard1").value;
-          const c2 = document.getElementById("h2hCard2").value;
-          updateH2HIcons(c1, c2);
+          // ✅ Default to Royal Hogs (26000059) vs Mother Witch (26000083)
+          const default1 = "26000059"; // Royal Hogs
+          const default2 = "26000083"; // Mother Witch
+
+          const select1 = document.getElementById("h2hCard1");
+          const select2 = document.getElementById("h2hCard2");
+
+          if (_idMap[default1]) select1.value = default1;
+          if (_idMap[default2]) select2.value = default2;
+
+          updateH2HIcons(default1, default2);
+          runH2H(Number(default1), Number(default2));
 
           // attach change + compare handlers
           document
@@ -386,19 +408,6 @@
           });
 
           renderLeaderboard(lbWithTrend);
-
-          // Elixir (map tag -> display name)
-          const exRows = ex.map((r) => ({
-            player_tag: r.player_tag,
-            name: _playerMap[r.player_tag] || r.player_tag,
-            games: r.games,
-            avg_leaked: r.avg_leaked,
-          }));
-          // cache games played by player tag for modal use
-          _gamesByTag = Object.fromEntries(
-            ex.map((r) => [r.player_tag, r.games])
-          );
-          renderElixir(exRows);
 
           // Cards (map id -> name + icon)
           const cardRows = cards.map((c) => ({
@@ -553,16 +562,26 @@
         // Load + render dynamic details
         (async () => {
           // Series counts (mocked played for now)
-          const seriesWon = row.series_wins;
-          const seriesPlayed = Math.max(
-            seriesWon + Math.floor(Math.random() * 4),
-            seriesWon
+          // Fetch summary first (so we can use accurate series numbers)
+          const sum = await fetchJSON(
+            `${API_BASE}/players/${encodeURIComponent(row.player_tag)}/summary`
           );
+
+          const seriesWon = Number(sum.series_won ?? row.series_wins ?? 0);
+          const seriesPlayed = Number(sum.series_played ?? 0);
+
           document.getElementById("modalSeriesWon").textContent = seriesWon;
           document.getElementById("modalSeriesPlayed").textContent =
             seriesPlayed;
+
+          // (keep Games Played from _gamesByTag as you already added)
           document.getElementById("modalGamesPlayed").textContent =
             _gamesByTag[row.player_tag] ?? 0;
+
+          const avgElixir = _avgElixirByTag[row.player_tag];
+          document.getElementById("modalAvgElixir").textContent = (
+            typeof avgElixir === "number" ? avgElixir : 0
+          ).toFixed(2);
 
           // ELO history (live from API, fallback to fake)
           let labels, values;
@@ -807,9 +826,11 @@
             }
           }
 
-          const winPct = played > 0 ? Math.round((won / played) * 100) : 0;
+          const winPct1 = played > 0 ? Math.round((won / played) * 100) : 0;
+          const won2 = Math.max(0, played - won);
+          const winPct2 = played > 0 ? 100 - winPct1 : 0;
 
-          // Fill UI
+          // Fill names & icons
           const name1 = _idMap[card1] || `Card #${card1}`;
           const name2 = _idMap[card2] || `Card #${card2}`;
           document.getElementById("h2hCard1Name").textContent = name1;
@@ -819,13 +840,18 @@
           document.getElementById("h2hCard2IconSmall").src =
             _iconMap[card2] || imgForCard(name2);
 
+          // NEW: set the three tiles
+          document.getElementById("h2hWon1").textContent = won;
           document.getElementById("h2hPlayed").textContent = played;
-          document.getElementById("h2hWon").textContent = won;
-          document.getElementById("h2hWinPct").textContent = `${winPct}%`;
-          document.getElementById("h2hWinBar").style.width = `${
-            played ? (won / played) * 100 : 0
-          }%`;
+          document.getElementById("h2hWon2").textContent = won2;
 
+          // NEW: set the two % labels and split bar widths
+          document.getElementById("h2hPct1").textContent = `${winPct1}%`;
+          document.getElementById("h2hPct2").textContent = `${winPct2}%`;
+          document.getElementById("h2hBar1").style.width = `${winPct1}%`;
+          document.getElementById("h2hBar2").style.width = `${winPct2}%`;
+
+          // show result box
           resBox.classList.remove("hidden");
         } catch (err) {
           console.error("H2H fetch failed:", err);
@@ -922,6 +948,15 @@
             <div class="text-xs text-cyan-200">Games Played</div>
             <div id="modalGamesPlayed" class="text-2xl font-bold text-cyan-200">
               0
+            </div>
+          </div>
+          <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
+            <div class="text-xs text-cyan-200">Avg Elixir</div>
+            <div
+              id="modalAvgElixir"
+              class="text-2xl font-bold text-pink-400 mx-auto"
+            >
+              0.00
             </div>
           </div>
           <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
