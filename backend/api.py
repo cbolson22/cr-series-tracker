@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, and_
 from fastapi.middleware.cors import CORSMiddleware
 from .db import Base, engine, get_db
 from .models import Game, GamePlayer, GamePlayerCard, Series
@@ -173,7 +173,7 @@ def card_head_to_head_games(
 def player_summary(tag: str, db: Session = Depends(get_db)):
     safe = tag.strip().upper()
 
-    # Top 3 cards by uses (across all games for this player)
+    # ---- Top 3 cards (unchanged) ----
     rows = db.execute(
         select(GamePlayerCard.card_id, func.count())
         .join(
@@ -188,15 +188,51 @@ def player_summary(tag: str, db: Session = Depends(get_db)):
     ).all()
     top_cards = [{"card_id": int(cid), "uses": int(cnt)} for cid, cnt in rows]
 
-    # ----- Most-played-with teammates -----
-    # Games together (same side)
+    # ---- Series played / won ----
+    series_played = db.scalar(
+        select(func.count())
+        .select_from(Series)
+        .where(
+            or_(
+                Series.teamA_tag1 == safe,
+                Series.teamA_tag2 == safe,
+                Series.teamB_tag1 == safe,
+                Series.teamB_tag2 == safe,
+            )
+        )
+    ) or 0
+
+    series_won = (
+        (db.scalar(
+            select(func.count())
+            .select_from(Series)
+            .where(
+                and_(
+                    Series.winner_team == 'A',
+                    or_(Series.teamA_tag1 == safe, Series.teamA_tag2 == safe)
+                )
+            )
+        ) or 0)
+        +
+        (db.scalar(
+            select(func.count())
+            .select_from(Series)
+            .where(
+                and_(
+                    Series.winner_team == 'B',
+                    or_(Series.teamB_tag1 == safe, Series.teamB_tag2 == safe)
+                )
+            )
+        ) or 0)
+    )
+
+    # ---- Top teammates (2) with series + games together (as before but returns a list) ----
     gt = db.execute(
         select(GamePlayer.game_id, GamePlayer.team)
         .where(GamePlayer.player_tag == safe)
     ).all()
     game_team = {gid: team for gid, team in gt}
     games_with: dict[str, int] = {}
-
     if game_team:
         co_rows = db.execute(
             select(GamePlayer.game_id, GamePlayer.player_tag, GamePlayer.team)
@@ -205,13 +241,11 @@ def player_summary(tag: str, db: Session = Depends(get_db)):
         for gid, ptag, pteam in co_rows:
             if ptag == safe:
                 continue
-            if pteam == game_team.get(gid):  # same side only
+            if pteam == game_team.get(gid):
                 games_with[ptag] = games_with.get(ptag, 0) + 1
 
-    # Series together (same side in a series)
     series_with: dict[str, int] = {}
     for s in db.scalars(select(Series)).all():
-        # same-side pairs A and B
         sideA = {s.teamA_tag1, s.teamA_tag2}
         sideB = {s.teamB_tag1, s.teamB_tag2}
         if safe in sideA:
@@ -221,17 +255,20 @@ def player_summary(tag: str, db: Session = Depends(get_db)):
             mate = (sideB - {safe}).pop()
             series_with[mate] = series_with.get(mate, 0) + 1
 
-    # Merge counts; sort by series desc, then games desc
-    all_mates = set(games_with.keys()) | set(series_with.keys())
     merged = []
-    for mate in all_mates:
+    for mate in set(games_with) | set(series_with):
         merged.append({
             "player_tag": mate,
             "series_together": int(series_with.get(mate, 0)),
             "games_together": int(games_with.get(mate, 0)),
         })
-
     merged.sort(key=lambda x: (x["series_together"], x["games_together"]), reverse=True)
     top_teammates = merged[:2]
 
-    return {"player_tag": safe, "top_cards": top_cards, "top_teammates": top_teammates}
+    return {
+        "player_tag": safe,
+        "series_played": int(series_played),
+        "series_won": int(series_won),
+        "top_cards": top_cards,
+        "top_teammates": top_teammates,
+    }
