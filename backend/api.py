@@ -1,3 +1,4 @@
+from datetime import timezone
 from fastapi import FastAPI, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_
@@ -48,7 +49,14 @@ def elo_history(tag: str, db: Session = Depends(get_db)):
         .where(EloHistory.player_tag == safe_tag)
         .order_by(EloHistory.timestamp.asc(), EloHistory.id.asc())
     ).all()
-    history = [{"timestamp": ts.isoformat(), "elo": elo} for ts, elo in rows]
+    history = []
+    for ts, elo in rows:
+        # your DB stores naive UTC; serialize as UTC with Z
+        if ts.tzinfo is None:
+            iso = ts.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+        else:
+            iso = ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        history.append({"timestamp": iso, "elo": elo})
     return {"player_tag": safe_tag, "history": history}
 
 # Endpoint to get elixir leak statistics per player
