@@ -590,16 +590,13 @@
             const eloData = await fetchJSON(
               `${API_BASE}/players/${encoded}/elo-history`
             );
+            const history = Array.isArray(eloData?.history)
+              ? eloData.history
+              : [];
 
-            const history = (eloData.history || [])
-              .slice()
-              .sort(
-                (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)
-              ); // ensure strict ascending
-
-            // build arrays for Chart.js time scale
-            const labels = history.map((p) => new Date(p.timestamp)); // parsed as UTC because of 'Z'
-            const values = history.map((p) => Number(p.elo));
+            // Build simple arrays for Chart.js
+            labels = history.map((p) => p.timestamp); // or p.timestamp.slice(5, 10) for MM-DD
+            values = history.map((p) => Number(p.elo)); // ensure numeric
 
             // If the API returned weird data, fallback
             if (values.filter(Number.isFinite).length < 2)
@@ -636,7 +633,8 @@
             },
             options: {
               responsive: true,
-              maintainAspectRatio: false,
+              maintainAspectRatio: false, // parent has fixed height
+              animation: { duration: 300 },
               scales: {
                 x: {
                   type: "time",
