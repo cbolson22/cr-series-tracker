@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_
 from fastapi.middleware.cors import CORSMiddleware
 from .db import Base, engine, get_db
-from .models import Game, GamePlayer, GamePlayerCard, Series
+from .models import Game, GamePlayer, GamePlayerCard, Series, EloHistory
 from .config import PLAYER_TAGS, TOUCHDOWN_DRAFT_MODE_ID
 
 
@@ -43,24 +43,13 @@ def series_leaderboard(db: Session = Depends(get_db)):
 @app.get("/players/{tag}/elo-history")
 def elo_history(tag: str, db: Session = Depends(get_db)):
     safe_tag = tag.strip().upper()
-    # TODO: Replace mock with real DB query when ELO table exists
-    # Example mock data
-    import random
-    from datetime import datetime, timedelta
-    points = []
-    now = datetime.utcnow()
-    elo = 1200 + random.randint(-50, 50)
-    for i in range(20):
-        elo += random.randint(-30, 30)
-        points.append({
-            "timestamp": (now - timedelta(days=20 - i)).isoformat(),
-            "elo": max(800, min(2400, elo))
-        })
-
-    # mock data
-    points = [{"timestamp": (now - timedelta(days=20 - i)).isoformat(), "elo": 1200 + i * 10} for i in range(20)]
-
-    return {"player_tag": safe_tag, "history": points}
+    rows = db.execute(
+        select(EloHistory.timestamp, EloHistory.elo)
+        .where(EloHistory.player_tag == safe_tag)
+        .order_by(EloHistory.timestamp.asc(), EloHistory.id.asc())
+    ).all()
+    history = [{"timestamp": ts.isoformat(), "elo": elo} for ts, elo in rows]
+    return {"player_tag": safe_tag, "history": history}
 
 # Endpoint to get elixir leak statistics per player
 @app.get("/stats/elixir")

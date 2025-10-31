@@ -61,3 +61,15 @@ class Series(Base):
             name="uq_series_pair_time",
         ),
     )
+
+class EloHistory(Base):
+    __tablename__ = "elo_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_tag: Mapped[str] = mapped_column(String, ForeignKey("players.tag", ondelete="RESTRICT"), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)  # store naive UTC (consistent with games/series)
+    elo: Mapped[int] = mapped_column(Integer)
+
+    __table_args__ = (
+        Index("ix_elo_player_time", "player_tag", "timestamp"),
+    )
