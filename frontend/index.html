@@ -105,6 +105,7 @@
         </nav>
       </div>
 
+      <!-- Leaderboard -->
       <section id="leaderboard" class="tab-content glass rounded-2xl p-6 mb-6">
         <h2 class="text-xl font-semibold mb-4 text-amber-300">
           Leaderboard (All-time)
@@ -124,25 +125,7 @@
         </div>
       </section>
 
-      <section id="elixir" class="tab-content glass rounded-2xl p-6 hidden">
-        <h2 class="text-xl font-semibold mb-4 text-pink-400">
-          Average Elixir Leaked
-        </h2>
-        <div class="overflow-x-auto rounded-xl ring-1 ring-white/10">
-          <table class="min-w-full text-sm">
-            <thead class="bg-white/10 text-cyan-100">
-              <tr>
-                <th class="text-left py-3 pl-4 pr-3">#</th>
-                <th class="text-left py-3 px-3">Player</th>
-                <th class="text-left py-3 px-3">Games</th>
-                <th class="text-left py-3 px-3">Avg Elixir</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-elixir"></tbody>
-          </table>
-        </div>
-      </section>
-
+      <!-- Card Win % -->
       <section id="cards" class="tab-content glass rounded-2xl p-6 hidden">
         <h2 class="text-xl font-semibold mb-4 text-amber-300">
           Card Win Percentage
@@ -152,6 +135,8 @@
           class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
         ></div>
       </section>
+
+      <!-- Card H2H -->
       <section id="h2h" class="tab-content glass rounded-2xl p-6 hidden">
         <h2 class="text-xl font-semibold mb-4 text-amber-300">
           Card Head-to-Head (Games)
@@ -169,9 +154,7 @@
               <select
                 id="h2hCard1"
                 class="w-full bg-white/10 px-3 py-2 rounded-lg ring-1 ring-white/10"
-              >
-                <!-- options injected from idMap -->
-              </select>
+              ></select>
             </div>
           </div>
 
@@ -186,9 +169,7 @@
               <select
                 id="h2hCard2"
                 class="w-full bg-white/10 px-3 py-2 rounded-lg ring-1 ring-white/10"
-              >
-                <!-- options injected from idMap -->
-              </select>
+              ></select>
             </div>
           </div>
         </div>
@@ -271,6 +252,9 @@
                 style="width: 0%"
               ></div>
             </div>
+            <div id="h2hReco" class="mt-2 text-xs text-cyan-200 text-center">
+              —
+            </div>
           </div>
         </div>
       </section>
@@ -278,13 +262,13 @@
 
     <script>
       const API_BASE = "/api";
-      let _leaderboardRows = []; // cache latest leaderboard rows
-      let _eloChart = null; // Chart.js instance
-      let _playerMap = {}; // global player map
-      let _idMap = {}; // card_id -> name
-      let _iconMap = {}; // card_id -> icon url
-      let _gamesByTag = {}; // player_tag -> games played
-      let _avgElixirByTag = {}; // player_tag -> avg_elixir
+      let _leaderboardRows = [];
+      let _eloChart = null;
+      let _playerMap = {};
+      let _idMap = {};
+      let _iconMap = {};
+      let _gamesByTag = {};
+      let _avgElixirByTag = {};
 
       async function fetchJSON(url) {
         const res = await fetch(url);
@@ -294,7 +278,6 @@
 
       async function loadAll() {
         try {
-          // Fetch everything we need in parallel
           const [lastUpdate, lb, ex, cards, idMap, iconMap, playerMap] =
             await Promise.all([
               fetchJSON(`${API_BASE}/last-update`),
@@ -305,11 +288,11 @@
               fetchJSON("card_icon_map.json"),
               fetchJSON("player_map.json"),
             ]);
+
           _playerMap = playerMap;
-          // store maps globally for H2H
-          _idMap = idMap; // card_id -> name
-          _iconMap = iconMap; // card_id -> icon url
-          // cache games & avg elixir for modal
+          _idMap = idMap;
+          _iconMap = iconMap;
+
           _gamesByTag = Object.fromEntries(
             ex.map((r) => [r.player_tag, r.games])
           );
@@ -317,29 +300,25 @@
             ex.map((r) => [r.player_tag, r.avg_leaked])
           );
 
-          // populate the H2H dropdowns (sorted by name)
+          // Populate H2H dropdowns
           const options = Object.entries(_idMap)
             .sort((a, b) => a[1].localeCompare(b[1]))
             .map(([id, name]) => `<option value="${id}">${name}</option>`)
             .join("");
-
           document.getElementById("h2hCard1").innerHTML = options;
           document.getElementById("h2hCard2").innerHTML = options;
 
-          // ✅ Default to Royal Hogs (26000059) vs Mother Witch (26000083)
-          const default1 = "26000059"; // Royal Hogs
-          const default2 = "26000083"; // Mother Witch
-
+          // Default H2H: Royal Hogs vs Mother Witch
+          const default1 = "26000059",
+            default2 = "26000083";
           const select1 = document.getElementById("h2hCard1");
           const select2 = document.getElementById("h2hCard2");
-
           if (_idMap[default1]) select1.value = default1;
           if (_idMap[default2]) select2.value = default2;
-
           updateH2HIcons(default1, default2);
           runH2H(Number(default1), Number(default2));
 
-          // attach change + compare handlers
+          // H2H handlers
           document
             .getElementById("h2hCard1")
             .addEventListener("change", (e) => {
@@ -362,19 +341,19 @@
             runH2H(v1, v2);
           });
 
-          // Last updated
+          // Last updated label
           document.getElementById("lastUpdated").textContent =
             "Last updated: " + (lastUpdate.last_battle_time ?? "—");
 
-          // Leaderboard (map tag -> display name)
+          // Leaderboard rows
           const lbRows = lb.map((r) => ({
             player_tag: r.player_tag,
             name: _playerMap[r.player_tag] || r.player_tag,
             series_wins: r.series_wins,
-            delta: 0, // will fill below
+            delta: 0,
           }));
 
-          // Fetch elo histories in parallel to compute trend deltas (last 3 days)
+          // Fetch histories in parallel to compute 3-day ELO delta
           const histPromises = lbRows.map((r) =>
             fetchJSON(
               `${API_BASE}/players/${encodeURIComponent(
@@ -383,33 +362,28 @@
             ).catch(() => null)
           );
           const histories = await Promise.all(histPromises);
-
           const nowMs = Date.now();
           const threeDaysAgoMs = nowMs - 3 * 24 * 60 * 60 * 1000;
 
           const lbWithTrend = lbRows.map((r, i) => {
             const hist = histories[i]?.history || [];
-
-            // keep only points within [now-3d, now]
             const recent = hist.filter((p) => {
               const t = Date.parse(p.timestamp);
               return Number.isFinite(t) && t >= threeDaysAgoMs && t <= nowMs;
             });
-
             let delta = 0;
             if (recent.length >= 2) {
               const first = Number(recent[0].elo);
               const last = Number(recent[recent.length - 1].elo);
-              if (Number.isFinite(first) && Number.isFinite(last)) {
+              if (Number.isFinite(first) && Number.isFinite(last))
                 delta = Math.round(last - first);
-              }
             }
             return { ...r, delta };
           });
 
           renderLeaderboard(lbWithTrend);
 
-          // Cards (map id -> name + icon)
+          // Card Win% grid
           const cardRows = cards.map((c) => ({
             id: c.card_id,
             name: idMap[c.card_id] || `Card #${c.card_id}`,
@@ -426,7 +400,6 @@
 
       function avatarFor(tag) {
         const name = _playerMap[tag] || tag.replace("#", "");
-        // Try local image first; fallback to placeholder if missing
         return `images/${encodeURIComponent(name)}.PNG`;
       }
       const imgForCard = (name) =>
@@ -443,31 +416,33 @@
       }
 
       function renderLeaderboard(rows) {
-        _leaderboardRows = rows; // cache for modal lookups
+        _leaderboardRows = rows;
         const tbody = document.getElementById("tbody-leaderboard");
         tbody.innerHTML = rows
           .map(
             (r, i) => `
-            <tr class='border-b border-white/10 hover:bg-white/10 cursor-pointer'
-                data-tag='${r.player_tag}'>
-              <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
-              <td class='py-3 px-3 flex items-center gap-3'>
-                <img src='${avatarFor(r.player_tag)}'
-                    class='h-8 w-8 rounded-full ring-2 ring-cyan-300/40'>
-                <div>
-                  <div class='font-semibold text-amber-100'>${r.name}</div>
-                  <div class='text-xs text-cyan-300'>${r.player_tag}</div>
-                </div>
-              </td>
-              <td class='py-3 px-3 text-lg font-bold text-cyan-200'>${
-                r.series_wins
-              }</td>
-              <td class='py-3 px-3'>${trendBadge(r.delta)}</td>
-            </tr>`
+          <tr class='border-b border-white/10 hover:bg-white/10 cursor-pointer' data-tag='${
+            r.player_tag
+          }'>
+            <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
+            <td class='py-3 px-3 flex items-center gap-3'>
+              <img src='${avatarFor(
+                r.player_tag
+              )}' class='h-8 w-8 rounded-full ring-2 ring-cyan-300/40'>
+              <div>
+                <div class='font-semibold text-amber-100'>${r.name}</div>
+                <div class='text-xs text-cyan-300'>${r.player_tag}</div>
+              </div>
+            </td>
+            <td class='py-3 px-3 text-lg font-bold text-cyan-200'>${
+              r.series_wins
+            }</td>
+            <td class='py-3 px-3'>${trendBadge(r.delta)}</td>
+          </tr>
+        `
           )
           .join("");
 
-        // Bind clicks for modal open
         tbody.querySelectorAll("tr[data-tag]").forEach((tr) => {
           tr.addEventListener("click", () => {
             const tag = tr.getAttribute("data-tag");
@@ -475,32 +450,6 @@
             if (row) openPlayerModal(row);
           });
         });
-      }
-
-      function renderElixir(rows) {
-        const sorted = [...rows].sort((a, b) => a.avg_leaked - b.avg_leaked);
-        document.getElementById("tbody-elixir").innerHTML = sorted
-          .map(
-            (r, i) => `
-        <tr class='border-b border-white/10 hover:bg-white/10'>
-          <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
-          <td class='py-3 px-3 flex items-center gap-3'>
-            <img src='${avatarFor(
-              r.player_tag
-            )}' class='h-8 w-8 rounded-full ring-2 ring-pink-400/40'>
-            <div><div class='font-semibold text-pink-300'>${
-              r.name
-            }</div><div class='text-xs text-pink-200'>${
-              r.player_tag
-            }</div></div>
-          </td>
-          <td class='py-3 px-3'>${r.games}</td>
-          <td class='py-3 px-3'><span class='inline-block px-2 py-1 rounded-full bg-pink-500/30 text-pink-100 ring-1 ring-pink-500/40'>${r.avg_leaked.toFixed(
-            2
-          )}</span></td>
-        </tr>`
-          )
-          .join("");
       }
 
       function renderCards(rows) {
@@ -511,24 +460,26 @@
           .map((c) => {
             const total = c.wins + c.losses;
             const winPct = total ? (c.wins / total) * 100 : 0;
-            return `<article class='rounded-xl overflow-hidden ring-1 ring-white/20 bg-white/10 hover:bg-white/20 transition'>
-          <img src='${c.icon || imgForCard(c.name)}' alt='${
+            return `
+            <article class='rounded-xl overflow-hidden ring-1 ring-white/20 bg-white/10 hover:bg-white/20 transition'>
+              <img src='${c.icon || imgForCard(c.name)}' alt='${
               c.name
             }' class='w-full h-32 object-cover'>
-          <div class='p-4'>
-            <div class='flex items-center justify-between mb-1'><h3 class='font-semibold text-amber-200'>${
-              c.name
-            }</h3><div class='text-sm text-cyan-100'>${c.wins}-${
-              c.losses
-            }</div></div>
-            <div class='h-2 w-full bg-white/20 rounded-full overflow-hidden mb-1'><div class='h-full bg-gradient-to-r from-cyan-400 to-amber-300' style='width:${winPct.toFixed(
-              1
-            )}%'></div></div>
-            <div class='text-xs text-cyan-100'>Win rate: <span class='font-semibold text-amber-200'>${winPct.toFixed(
-              1
-            )}%</span></div>
-          </div>
-        </article>`;
+              <div class='p-4'>
+                <div class='flex items-center justify-between mb-1'>
+                  <h3 class='font-semibold text-amber-200'>${c.name}</h3>
+                  <div class='text-sm text-cyan-100'>${c.wins}-${c.losses}</div>
+                </div>
+                <div class='h-2 w-full bg-white/20 rounded-full overflow-hidden mb-1'>
+                  <div class='h-full bg-gradient-to-r from-cyan-400 to-amber-300' style='width:${winPct.toFixed(
+                    1
+                  )}%'></div>
+                </div>
+                <div class='text-xs text-cyan-100'>Win rate: <span class='font-semibold text-amber-200'>${winPct.toFixed(
+                  1
+                )}%</span></div>
+              </div>
+            </article>`;
           })
           .join("");
       }
@@ -538,12 +489,10 @@
         const sheet = document.getElementById("modalSheet");
         const backdrop = document.getElementById("modalBackdrop");
 
-        // Basic info (set immediately)
         document.getElementById("modalAvatar").src = avatarFor(row.player_tag);
         document.getElementById("modalName").textContent = row.name;
         document.getElementById("modalTag").textContent = row.player_tag;
 
-        // Show + animate in right away (so user sees the modal while data loads)
         modal.classList.remove("hidden");
         modal.classList.add("flex");
         document.body.classList.add("overflow-hidden");
@@ -552,135 +501,114 @@
           sheet.classList.remove("opacity-0", "translate-y-4", "scale-95");
         });
 
-        // Close handlers
         document.getElementById("modalClose").onclick = closePlayerModal;
         backdrop.onclick = closePlayerModal;
         document.onkeydown = (e) => {
           if (e.key === "Escape") closePlayerModal();
         };
 
-        // Load + render dynamic details
         (async () => {
-          // Series counts (mocked played for now)
-          // Fetch summary first (so we can use accurate series numbers)
-          const sum = await fetchJSON(
-            `${API_BASE}/players/${encodeURIComponent(row.player_tag)}/summary`
-          );
-
-          const seriesWon = Number(sum.series_won ?? row.series_wins ?? 0);
-          const seriesPlayed = Number(sum.series_played ?? 0);
-
-          document.getElementById("modalSeriesWon").textContent = seriesWon;
-          document.getElementById("modalSeriesPlayed").textContent =
-            seriesPlayed;
-
-          // (keep Games Played from _gamesByTag as you already added)
-          document.getElementById("modalGamesPlayed").textContent =
-            _gamesByTag[row.player_tag] ?? 0;
-
-          const avgElixir = _avgElixirByTag[row.player_tag];
-          document.getElementById("modalAvgElixir").textContent = (
-            typeof avgElixir === "number" ? avgElixir : 0
-          ).toFixed(2);
-
-          // ELO history (live from API, fallback to fake)
-          let labels, values;
           try {
-            const encoded = encodeURIComponent(row.player_tag);
-            const eloData = await fetchJSON(
-              `${API_BASE}/players/${encoded}/elo-history`
-            );
-            const history = Array.isArray(eloData?.history)
-              ? eloData.history
-              : [];
-
-            // Build simple arrays for Chart.js
-            labels = history.map((p) => p.timestamp); // or p.timestamp.slice(5, 10) for MM-DD
-            values = history.map((p) => Number(p.elo)); // ensure numeric
-
-            // If the API returned weird data, fallback
-            if (values.filter(Number.isFinite).length < 2)
-              throw new Error("not enough points");
-          } catch (e) {
-            console.warn("ELO fetch/parse issue, using fake data:", e);
-            const fake = makeFakeEloSeries(20); // [{x,y}] from your helper
-            labels = fake.map((_, i) => `${i + 1}`); // 1..20
-            values = fake.map((pt) => pt.y);
-          }
-
-          // Current ELO from last value
-          document.getElementById("modalEloCurrent").textContent = Math.round(
-            values[values.length - 1]
-          );
-
-          // Draw chart using labels + data
-          const ctx = document.getElementById("eloChart").getContext("2d");
-          if (_eloChart) _eloChart.destroy();
-          _eloChart = new Chart(ctx, {
-            type: "line",
-            data: {
-              labels,
-              datasets: [
-                {
-                  label: "ELO",
-                  data: values,
-                  tension: 0.3,
-                  borderWidth: 2,
-                  borderColor: "rgb(56,189,248)",
-                  pointRadius: 0,
-                },
-              ],
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false, // parent has fixed height
-              animation: { duration: 300 },
-              scales: {
-                x: {
-                  type: "time",
-                  time: { unit: "day" },
-                  ticks: { color: "rgba(255,255,255,0.6)" },
-                },
-                y: {
-                  grid: { color: "rgba(255,255,255,0.1)" },
-                  ticks: { color: "rgba(255,255,255,0.6)" },
-                },
-              },
-              plugins: {
-                legend: { display: false },
-                tooltip: { intersect: false, mode: "index" },
-              },
-            },
-          });
-          // Top cards + most-played-with (summary)
-          try {
+            // Summary (series counts, top cards, mates)
             const sum = await fetchJSON(
               `${API_BASE}/players/${encodeURIComponent(
                 row.player_tag
               )}/summary`
             );
+            const seriesWon = Number(sum.series_won ?? row.series_wins ?? 0);
+            const seriesPlayed = Number(sum.series_played ?? 0);
+            document.getElementById("modalSeriesWon").textContent = seriesWon;
+            document.getElementById("modalSeriesPlayed").textContent =
+              seriesPlayed;
+            document.getElementById("modalGamesPlayed").textContent =
+              _gamesByTag[row.player_tag] ?? 0;
+            const avgElixir = _avgElixirByTag[row.player_tag];
+            document.getElementById("modalAvgElixir").textContent = (
+              typeof avgElixir === "number" ? avgElixir : 0
+            ).toFixed(2);
 
-            // Top 3 cards
+            // ELO history
+            let points = [];
+            try {
+              const eloData = await fetchJSON(
+                `${API_BASE}/players/${encodeURIComponent(
+                  row.player_tag
+                )}/elo-history`
+              );
+              points = (eloData.history || [])
+                .map((p) => ({ x: new Date(p.timestamp), y: Number(p.elo) }))
+                .filter((pt) => Number.isFinite(pt.y) && !isNaN(pt.x.getTime()))
+                .sort((a, b) => a.x - b.x);
+            } catch (err) {
+              console.warn("ELO fetch failed:", err);
+            }
+
+            if (points.length) {
+              document.getElementById("modalEloCurrent").textContent =
+                Math.round(points[points.length - 1].y);
+            } else {
+              document.getElementById("modalEloCurrent").textContent = "0";
+            }
+
+            const ctx = document.getElementById("eloChart").getContext("2d");
+            if (_eloChart) _eloChart.destroy();
+            _eloChart = new Chart(ctx, {
+              type: "line",
+              data: {
+                datasets: [
+                  {
+                    label: "ELO",
+                    data: points,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    borderColor: "rgb(56,189,248)",
+                    pointRadius: 0,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                parsing: false, // IMPORTANT when giving [{x,y}]
+                animation: { duration: 300 },
+                scales: {
+                  x: {
+                    type: "time",
+                    time: { unit: "day" },
+                    ticks: { color: "rgba(255,255,255,0.6)" },
+                  },
+                  y: {
+                    grid: { color: "rgba(255,255,255,0.1)" },
+                    ticks: { color: "rgba(255,255,255,0.6)" },
+                  },
+                },
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { intersect: false, mode: "index" },
+                },
+              },
+            });
+
+            // Top cards
             const top = sum.top_cards || [];
-            const cardsHtml =
-              top
-                .map((tc) => {
-                  const cid = tc.card_id;
-                  const name = _idMap[cid] || `#${cid}`;
-                  const icon = _iconMap[cid] || imgForCard(name);
-                  return `
+            const cardsHtml = top.length
+              ? top
+                  .map((tc) => {
+                    const cid = tc.card_id;
+                    const name = _idMap[cid] || `#${cid}`;
+                    const icon = _iconMap[cid] || imgForCard(name);
+                    return `
                     <div class="flex items-center gap-2 rounded-lg bg-white/10 px-2 py-1 ring-1 ring-white/10">
                       <img src="${icon}" class="h-6 w-10 rounded-md object-contain" alt="${name}">
                       <span class="text-cyan-100 text-sm">${name}</span>
                       <span class="text-amber-300 text-xs ml-auto">x${tc.uses}</span>
-                    </div>
-                  `;
-                })
-                .join("") ||
-              `<span class="text-cyan-200 text-sm">No data yet</span>`;
+                    </div>`;
+                  })
+                  .join("")
+              : `<span class="text-cyan-200 text-sm">No data yet</span>`;
             document.getElementById("modalTopCards").innerHTML = cardsHtml;
 
-            // Top two teammates
+            // Top teammates
             const mates = sum.top_teammates || [];
             const matesHtml = mates.length
               ? mates
@@ -693,74 +621,27 @@
                       )}" class="h-8 w-8 rounded-full ring-2 ring-cyan-300/40" alt="">
                       <div>
                         <div class="font-semibold text-amber-200">${mname}</div>
-                        <div class="text-xs text-cyan-200">
-                          ${m.player_tag} · ${m.series_together} series · ${
-                      m.games_together
-                    } games
-                        </div>
+                        <div class="text-xs text-cyan-200">${m.player_tag} · ${
+                      m.series_together
+                    } series · ${m.games_together} games</div>
                       </div>
-                    </div>
-                  `;
+                    </div>`;
                   })
                   .join("")
               : `<span class="text-cyan-200 text-sm">No data yet</span>`;
             document.getElementById("modalMates").innerHTML = matesHtml;
           } catch (e) {
-            console.warn("summary fetch failed:", e);
-            document.getElementById(
-              "modalTopCards"
-            ).innerHTML = `<span class="text-cyan-200 text-sm">No data yet</span>`;
-            document.getElementById(
-              "modalMates"
-            ).innerHTML = `<span class="text-cyan-200 text-sm">No data yet</span>`;
+            console.warn("summary/elo render failed:", e);
           }
         })();
-      }
-
-      function drawEloChart(eloSeries) {
-        const ctx = document.getElementById("eloChart").getContext("2d");
-        if (_eloChart) _eloChart.destroy();
-        _eloChart = new Chart(ctx, {
-          type: "line",
-          data: {
-            datasets: [
-              {
-                label: "ELO",
-                data: eloSeries,
-                tension: 0.3,
-                borderWidth: 2,
-                borderColor: "rgb(56,189,248)", // cyan-ish line
-                pointRadius: 0,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 300 },
-            scales: {
-              x: { display: false },
-              y: {
-                grid: { color: "rgba(255,255,255,0.1)" },
-                ticks: { color: "rgba(255,255,255,0.6)" },
-              },
-            },
-            plugins: {
-              legend: { display: false },
-              tooltip: { intersect: false, mode: "index" },
-            },
-          },
-        });
       }
 
       function closePlayerModal() {
         const modal = document.getElementById("playerModal");
         const sheet = document.getElementById("modalSheet");
         const backdrop = document.getElementById("modalBackdrop");
-
         backdrop.classList.add("opacity-0");
         sheet.classList.add("opacity-0", "translate-y-4", "scale-95");
-
         setTimeout(() => {
           document.body.classList.remove("overflow-hidden");
           modal.classList.add("hidden");
@@ -768,25 +649,23 @@
         }, 200);
       }
 
-      // Fake ELO generator (replace with API-driven later)
-      function makeFakeEloSeries(n = 20) {
-        const start = 1200 + Math.floor(Math.random() * 200); // 1200..1400
-        let val = start;
-        const out = [];
-        for (let i = 0; i < n; i++) {
-          val += (Math.random() - 0.45) * 30; // gentle random walk
-          out.push({ x: i, y: Math.max(800, Math.min(2400, val)) });
-        }
-        return out;
+      // H2H helpers
+      function updateH2HIcons(card1, card2) {
+        document.getElementById("h2hCard1Icon").src =
+          _iconMap[card1] || imgForCard(_idMap[card1] || `Card ${card1}`);
+        document.getElementById("h2hCard2Icon").src =
+          _iconMap[card2] || imgForCard(_idMap[card2] || `Card ${card2}`);
       }
 
-      function updateH2HIcons(card1, card2) {
-        const i1 = document.getElementById("h2hCard1Icon");
-        const i2 = document.getElementById("h2hCard2Icon");
-        i1.src =
-          _iconMap[card1] || imgForCard(_idMap[card1] || `Card ${card1}`);
-        i2.src =
-          _iconMap[card2] || imgForCard(_idMap[card2] || `Card ${card2}`);
+      function h2hRecommendation(p1) {
+        if (p1 >= 86) return "Card 1 for sure";
+        if (p1 >= 71) return "Card 1 strongly favored";
+        if (p1 >= 61) return "Card 1 favored";
+        if (p1 >= 51) return "Slight edge: Card 1";
+        if (p1 >= 40) return "your choice";
+        if (p1 >= 30) return "Slight edge: Card 2";
+        if (p1 >= 15) return "Card 2 favored";
+        return "Card 2 for sure";
       }
 
       async function runH2H(card1, card2) {
@@ -801,15 +680,11 @@
         }
 
         try {
-          // Call your endpoint
           const data = await fetchJSON(
             `${API_BASE}/stats/cards/head-to-head?card1=${card1}&card2=${card2}`
           );
-
-          // Robust parsing: accept games_* (new), series_* (old), or a breakdown object
           let played = 0,
             won = 0;
-
           if (typeof data?.games_played === "number") {
             played = Number(data.games_played) || 0;
             won = Number(data.games_won) || 0;
@@ -830,7 +705,6 @@
           const won2 = Math.max(0, played - won);
           const winPct2 = played > 0 ? 100 - winPct1 : 0;
 
-          // Fill names & icons
           const name1 = _idMap[card1] || `Card #${card1}`;
           const name2 = _idMap[card2] || `Card #${card2}`;
           document.getElementById("h2hCard1Name").textContent = name1;
@@ -840,18 +714,17 @@
           document.getElementById("h2hCard2IconSmall").src =
             _iconMap[card2] || imgForCard(name2);
 
-          // NEW: set the three tiles
           document.getElementById("h2hWon1").textContent = won;
           document.getElementById("h2hPlayed").textContent = played;
           document.getElementById("h2hWon2").textContent = won2;
 
-          // NEW: set the two % labels and split bar widths
           document.getElementById("h2hPct1").textContent = `${winPct1}%`;
           document.getElementById("h2hPct2").textContent = `${winPct2}%`;
           document.getElementById("h2hBar1").style.width = `${winPct1}%`;
           document.getElementById("h2hBar2").style.width = `${winPct2}%`;
 
-          // show result box
+          document.getElementById("h2hReco").textContent =
+            h2hRecommendation(winPct1);
           resBox.classList.remove("hidden");
         } catch (err) {
           console.error("H2H fetch failed:", err);
@@ -859,6 +732,7 @@
         }
       }
 
+      // Tabs + refresh
       const tabs = document.querySelectorAll(".tab-btn");
       const contents = document.querySelectorAll(".tab-content");
       tabs.forEach((btn) =>
@@ -881,7 +755,6 @@
           document.getElementById(btn.dataset.tab).classList.remove("hidden");
         })
       );
-
       document.getElementById("refreshBtn").addEventListener("click", () => {
         loadAll().then(() => {
           document.getElementById("lastUpdated").textContent =
@@ -891,18 +764,16 @@
 
       loadAll();
     </script>
+
     <!-- Player Detail Modal -->
     <div
       id="playerModal"
       class="fixed inset-0 z-50 hidden items-center justify-center"
     >
-      <!-- Backdrop -->
       <div
         id="modalBackdrop"
         class="absolute inset-0 bg-black/60 opacity-0 transition-opacity"
       ></div>
-
-      <!-- Sheet -->
       <div
         id="modalSheet"
         class="relative w-[min(680px,92vw)] max-h-[80vh] overflow-y-auto rounded-2xl glass p-6 translate-y-4 scale-95 opacity-0 transition-all duration-200"
@@ -928,29 +799,43 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-3 gap-3 mb-4">
-          <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
+        <div class="grid grid-cols-5 gap-3 mb-4">
+          <div
+            class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+          >
             <div class="text-xs text-cyan-200">Series Won</div>
-            <div id="modalSeriesWon" class="text-2xl font-bold text-amber-300">
-              0
-            </div>
-          </div>
-          <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-            <div class="text-xs text-cyan-200">Series Played</div>
             <div
-              id="modalSeriesPlayed"
-              class="text-2xl font-bold text-cyan-200"
+              id="modalSeriesWon"
+              class="text-2xl font-bold text-amber-300 mx-auto"
             >
               0
             </div>
           </div>
-          <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
-            <div class="text-xs text-cyan-200">Games Played</div>
-            <div id="modalGamesPlayed" class="text-2xl font-bold text-cyan-200">
+          <div
+            class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+          >
+            <div class="text-xs text-cyan-200">Series Played</div>
+            <div
+              id="modalSeriesPlayed"
+              class="text-2xl font-bold text-cyan-200 mx-auto"
+            >
               0
             </div>
           </div>
-          <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
+          <div
+            class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+          >
+            <div class="text-xs text-cyan-200">Games Played</div>
+            <div
+              id="modalGamesPlayed"
+              class="text-2xl font-bold text-cyan-200 mx-auto"
+            >
+              0
+            </div>
+          </div>
+          <div
+            class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+          >
             <div class="text-xs text-cyan-200">Avg Elixir</div>
             <div
               id="modalAvgElixir"
@@ -959,11 +844,13 @@
               0.00
             </div>
           </div>
-          <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
+          <div
+            class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10 text-center"
+          >
             <div class="text-xs text-cyan-200">ELO (current)</div>
             <div
               id="modalEloCurrent"
-              class="text-2xl font-bold text-emerald-300"
+              class="text-2xl font-bold text-emerald-300 mx-auto"
             >
               0
             </div>
@@ -977,25 +864,12 @@
           </div>
           <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
             <div class="text-sm text-cyan-100 mb-2">Most Played With</div>
-            <div id="modalMates" class="flex flex-col gap-2">
-              <img
-                id="modalMateAvatar"
-                class="h-8 w-8 rounded-full ring-2 ring-cyan-300/40"
-                alt=""
-              />
-              <div>
-                <div id="modalMateName" class="font-semibold text-amber-200">
-                  —
-                </div>
-                <div id="modalMateTag" class="text-xs text-cyan-200">—</div>
-              </div>
-            </div>
+            <div id="modalMates" class="flex flex-col gap-2"></div>
           </div>
         </div>
 
         <div class="rounded-xl bg-white/10 p-3 ring-1 ring-white/10">
           <div class="text-sm text-cyan-100 mb-2">ELO over time</div>
-          <!-- Fixed-height chart container -->
           <div class="h-56">
             <canvas id="eloChart" class="w-full h-full"></canvas>
           </div>
