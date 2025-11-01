@@ -535,12 +535,18 @@
                   row.player_tag
                 )}/elo-history`
               );
+              // Build points with ISO strings; let Chart.js/adapter parse
               points = (eloData.history || [])
-                .map((p) => ({ x: new Date(p.timestamp), y: Number(p.elo) }))
-                .filter((pt) => Number.isFinite(pt.y) && !isNaN(pt.x.getTime()))
-                .sort((a, b) => a.x - b.x);
+                .map((p) => ({ x: p.timestamp, y: Number(p.elo) }))
+                .filter((pt) => Number.isFinite(pt.y));
+              // Ensure chronological order just in case
+              points.sort((a, b) => Date.parse(a.x) - Date.parse(b.x));
+
+              console.log("elo history raw:", eloData.history);
+              console.log("chart points:", points.length, points.slice(0, 3));
             } catch (err) {
               console.warn("ELO fetch failed:", err);
+              points = [];
             }
 
             if (points.length) {
@@ -558,7 +564,7 @@
                 datasets: [
                   {
                     label: "ELO",
-                    data: points,
+                    data: points, // [{x: "2025-10-14T00:21:21Z", y: 390}, ...]
                     tension: 0.3,
                     borderWidth: 2,
                     borderColor: "rgb(56,189,248)",
@@ -569,7 +575,7 @@
               options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                parsing: false, // IMPORTANT when giving [{x,y}]
+                // NOTE: remove parsing:false so Chart.js parses {x: ISO, y: number}
                 animation: { duration: 300 },
                 scales: {
                   x: {
