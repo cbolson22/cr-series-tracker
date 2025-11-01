@@ -564,8 +564,9 @@
                 datasets: [
                   {
                     label: "ELO",
-                    data: points, // [{x: "2025-10-14T00:21:21Z", y: 390}, ...]
-                    tension: 0.3,
+                    data: points, // [{x: ISO string, y: number}]
+                    stepped: "after", // <-- staircase (discrete jumps)
+                    tension: 0, // <-- no smoothing
                     borderWidth: 2,
                     borderColor: "rgb(56,189,248)",
                     pointRadius: 0,
@@ -575,8 +576,8 @@
               options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                // NOTE: remove parsing:false so Chart.js parses {x: ISO, y: number}
-                animation: { duration: 300 },
+                // let Chart.js parse ISO strings ↔ time scale
+                parsing: true,
                 scales: {
                   x: {
                     type: "time",
