@@ -60,14 +60,14 @@ def rebuild_elo(db: Session) -> int:
         p3, p4 = B
         e1, e2, e3, e4 = elo[p1], elo[p2], elo[p3], elo[p4]
 
-        # Expected team scores (your definition)
+        # Expected team scores
         E_p1 = _exp_vs_two(e1, e3, e4)
         E_p2 = _exp_vs_two(e2, e3, e4)
         expected_A = (E_p1 + E_p2) / 2.0
 
         E_p3 = _exp_vs_two(e3, e1, e2)
         E_p4 = _exp_vs_two(e4, e1, e2)
-        expected_B = (E_p3 + E_p4) / 2.0   # <-- not (1 - expected_A)
+        expected_B = (E_p3 + E_p4) / 2.0
 
         score_A = 1.0 if s.winner_team == "A" else 0.0
         score_B = 1.0 - score_A
