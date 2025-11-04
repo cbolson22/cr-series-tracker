@@ -3,6 +3,7 @@ from datetime import datetime
 from backend.db import Base, engine, SessionLocal
 from backend.config import PLAYER_TAGS
 from backend.cr_client import player_battlelog
+from backend.elo import rebuild_elo
 from backend.ingest import upsert_game
 from backend.series import detect_series
 
@@ -21,6 +22,10 @@ def main():
                     new_count += 1
             db.commit()
         detect_series(db, since_hours=24)
+        
+        # Only rebuild ELO if new games were added
+        if new_count > 0:
+            rebuild_elo(db)
         print(f"[{datetime.utcnow().isoformat()}] Fetched. New games: {new_count}")
     finally:
         db.close()
