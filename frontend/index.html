@@ -117,6 +117,7 @@
                 <th class="text-left py-3 pl-4 pr-3">#</th>
                 <th class="text-left py-3 px-3">Player</th>
                 <th class="text-left py-3 px-3">Series Wins</th>
+                <th class="text-left py-3 px-3">ELO</th>
                 <th class="text-left py-3 px-3">ELO Δ (3d)</th>
               </tr>
             </thead>
@@ -262,6 +263,7 @@
 
     <script>
       const API_BASE = "/api";
+      // const API_BASE = "http://127.0.0.1:8000"; // FOR LOCAL HOSTING -- Uvicorn and ngix use different ports locally
       let _leaderboardRows = [];
       let _eloChart = null;
       let _playerMap = {};
@@ -367,21 +369,40 @@
 
           const lbWithTrend = lbRows.map((r, i) => {
             const hist = histories[i]?.history || [];
+
+            // current ELO = last point’s elo (if present)
+            const current_elo = hist.length
+              ? Number(hist[hist.length - 1].elo)
+              : null;
+
+            // 3-day delta
             const recent = hist.filter((p) => {
               const t = Date.parse(p.timestamp);
               return Number.isFinite(t) && t >= threeDaysAgoMs && t <= nowMs;
             });
+
             let delta = 0;
             if (recent.length >= 2) {
               const first = Number(recent[0].elo);
               const last = Number(recent[recent.length - 1].elo);
-              if (Number.isFinite(first) && Number.isFinite(last))
+              if (Number.isFinite(first) && Number.isFinite(last)) {
                 delta = Math.round(last - first);
+              }
             }
-            return { ...r, delta };
+
+            return { ...r, current_elo, delta };
           });
 
-          renderLeaderboard(lbWithTrend);
+          // Sort leaderboard by current ELO (desc), fallback to series wins
+          const lbSorted = [...lbWithTrend].sort((a, b) => {
+            if (b.current_elo == null && a.current_elo == null)
+              return b.series_wins - a.series_wins;
+            if (b.current_elo == null) return -1;
+            if (a.current_elo == null) return 1;
+            return b.current_elo - a.current_elo; // highest first
+          });
+
+          renderLeaderboard(lbSorted);
 
           // Card Win% grid
           const cardRows = cards.map((c) => ({
@@ -421,25 +442,26 @@
         tbody.innerHTML = rows
           .map(
             (r, i) => `
-          <tr class='border-b border-white/10 hover:bg-white/10 cursor-pointer' data-tag='${
-            r.player_tag
-          }'>
-            <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
-            <td class='py-3 px-3 flex items-center gap-3'>
-              <img src='${avatarFor(
-                r.player_tag
-              )}' class='h-8 w-8 rounded-full ring-2 ring-cyan-300/40'>
-              <div>
-                <div class='font-semibold text-amber-100'>${r.name}</div>
-                <div class='text-xs text-cyan-300'>${r.player_tag}</div>
-              </div>
-            </td>
-            <td class='py-3 px-3 text-lg font-bold text-cyan-200'>${
-              r.series_wins
-            }</td>
-            <td class='py-3 px-3'>${trendBadge(r.delta)}</td>
-          </tr>
-        `
+            <tr class='border-b border-white/10 hover:bg-white/10 cursor-pointer'
+                data-tag='${r.player_tag}'>
+              <td class='py-3 pl-4 pr-3 text-amber-200'>${i + 1}</td>
+              <td class='py-3 px-3 flex items-center gap-3'>
+                <img src='${avatarFor(r.player_tag)}'
+                    class='h-8 w-8 rounded-full ring-2 ring-cyan-300/40'>
+                <div>
+                  <div class='font-semibold text-amber-100'>${r.name}</div>
+                  <div class='text-xs text-cyan-300'>${r.player_tag}</div>
+                </div>
+              </td>
+              <td class='py-3 px-3 text-lg font-bold text-cyan-200'>${
+                r.series_wins
+              }</td>
+              <!-- NEW ELO column -->
+              <td class='py-3 px-3 text-lg font-semibold text-green-300'>
+                ${r.current_elo ?? "—"}
+              </td>
+              <td class='py-3 px-3'>${trendBadge(r.delta)}</td>
+            </tr>`
           )
           .join("");
 
