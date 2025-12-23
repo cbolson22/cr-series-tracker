@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Tuple
 import hashlib
 from sqlalchemy.orm import Session
@@ -71,12 +71,23 @@ def upsert_game(db: Session, b: dict) -> bool:
     if not participants(b) <= ALLOWED:
         return False  # skip games with any outsider
 
+    # Check for recent games with same players to avoid duplicates from API
+    (a1, a2), (b1, b2), swapped = normalize_teams(b)
+    bt_naive = parse_time(b["battleTime"]).replace(tzinfo=None)
+    time_delta = timedelta(seconds=5)
+
+    if db.query(Game.id).filter(
+        Game.teamA_tag1 == a1,
+        Game.teamA_tag2 == a2,
+        Game.teamB_tag1 == b1,
+        Game.teamB_tag2 == b2,
+        Game.battle_time.between(bt_naive - time_delta, bt_naive + time_delta)
+    ).first():
+        return False
+
     gid = game_uid(b)
     if db.get(Game, gid):
         return False  # already ingested
-
-    # canonicalize team ordering
-    (a1, a2), (b1, b2), swapped = normalize_teams(b)
 
     # crowns per side (don’t sum per-player; each has team total)
     a_c = team_crowns(b, "team")
@@ -89,13 +100,12 @@ def upsert_game(db: Session, b: dict) -> bool:
         w = {'A': 'B', 'B': 'A', 'D': 'D'}[w]
         a_c, b_c = b_c, a_c  # flip crowns to match canonical sides
 
-    bt = parse_time(b["battleTime"]).replace(tzinfo=None)  # store naive UTC
     mode_id = (b.get("gameMode") or {}).get("id")
     event_tag = b.get("eventTag")
 
     g = Game(
         id=gid,
-        battle_time=bt,
+        battle_time=bt_naive,
         type=b.get("type"),
         mode_id=mode_id,
         event_tag=event_tag,
