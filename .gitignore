@@ -40,3 +40,6 @@ dist/
 
 # Ignore local player images
 frontend/images/
+
+# Gemini context file
+GEMINI.md
