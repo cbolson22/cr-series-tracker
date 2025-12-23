@@ -25,7 +25,8 @@ def main():
         
         # Only rebuild ELO if new games were added
         if new_count > 0:
-            rebuild_elo(db)
+            n = rebuild_elo(db)
+            print(f"ELO rebuild done. Inserted {n} rows.")
         print(f"[{datetime.utcnow().isoformat()}] Fetched. New games: {new_count}")
     finally:
         db.close()
