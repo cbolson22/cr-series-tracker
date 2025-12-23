@@ -10,6 +10,12 @@ __pycache__/
 .env.*
 *.sqlite3
 cr_series.db
+*_backup*.db
+
+# SQLite runtime files
+*.db
+*.db-wal
+*.db-shm
 
 # VSCode & system files
 .vscode/
