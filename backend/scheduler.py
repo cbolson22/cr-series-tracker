@@ -5,6 +5,7 @@ from .config import PLAYER_TAGS
 from .cr_client import player_battlelog
 from .ingest import upsert_game
 from .series import detect_series
+from .elo import rebuild_elo
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,6 +30,9 @@ def timed_sync():
                     print('ingest error:', e)
             db.commit()
         detect_series(db, since_hours=6)
+        if new_count > 0: # Added conditional Elo rebuild
+            n = rebuild_elo(db)
+            print(f"ELO rebuild done. Inserted {n} rows.")
         print(f"sync done, new games: {new_count}")
     finally:
         db.close()
