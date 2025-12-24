@@ -127,7 +127,7 @@ Simply open the `frontend/index.html` file in your web browser. It will automati
 
 The `scripts/` directory contains useful scripts for data management:
 
-- `fetch_once.py`: Fetches recent games, updates series, and rebuilds Elo ratings if new games are found. Ideal for running on a cron job if you don't use the built-in scheduler.
+- `fetch_once.py`: Fetches recent games, updates series, and rebuilds Elo ratings if new games are found. Ideal for running on a cron job if you do not use the built-in scheduler.
 - `recompute.py`: Re-processes all games in the database to detect series. Useful if you change the series detection logic.
 - `recompute_elo.py`: Recalculates all Elo ratings from scratch based on the existing series data.
 
